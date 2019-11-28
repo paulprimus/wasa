@@ -2,50 +2,62 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 )
 
 var Esc string = "\x1b"
+var RUNE_A rune = '\x3d'
 
 func main() {
-	var reader = bufio.NewReader(os.Stdin)
-	var output []rune
-	fmt.Println("Wasa hat begonnen!")
-	//[]byte{0x1b}, '[','s'
-	fmt.Sprintf("%s","\x1b[s")
-	for {
-		input, _, err := reader.ReadRune()
-		if err != nil && err == io.EOF {
-			break
-		}
-		output = append(output, input)
-	}
-	writer := bufio.NewWriter(os.Stdout)
-	_, err := writer.Write([]byte(string(output)))
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(-1)
-	}
-	err = writer.Flush()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(-1)
-	}
-	fmt.Sprintf("%s","\x1b[2K")
-	//fmt.Print(restoreCursorPos())
+
+	fmt.Println("Start!")
+
+	pr, pw := io.Pipe()
+	c1 := make(chan int)
+	//c2 := make(chan int)
+	go writeToPipe(pw, c1)
+	go readFromPipe(pr, c1)
+
+	<-c1
+	//<-c2
+
+	fmt.Println("Bye")
 }
 
-//func escape(format string, args ...interface{}) []byte {
-//	//return fmt.Sprintf("%s%s", Esc, fmt.Sprintf(format, args...))
-//	return []byte{0x1b, '[', 'u'}
-//}
-//
-//func saveCursorPos() string {
-//	return escape("[s")
-//}
+func writeToPipe(pw *io.PipeWriter, ch chan int) {
+	var data []rune
+	var err error
+	var r rune
 
-func restoreCursorPos() []byte {
-	return []byte{0x1b, '[', 'u'}
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		if r, _, err = reader.ReadRune(); err != nil {
+			panic(err)
+		}
+		data = append(data, r)
+		if r == 's' {
+			if _, err = pw.Write([]byte(string(data))); err != nil {
+				panic(err)
+			}
+		} else if r == 'q' {
+			pw.Close()
+			break
+		}
+	}
+	ch <- 1
+
+}
+
+func readFromPipe(pr *io.PipeReader, ch chan int) {
+	//var in []byte
+	//bw := bufio.NewWriter(os.Stdout)
+	if _, err := io.Copy(os.Stdout, pr); errors.Is(err, io.EOF) {
+		//fmt.Println(in)
+		pr.Close()
+		//bw.Flush()
+		ch <- 1
+	}
 }

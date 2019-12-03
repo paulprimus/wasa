@@ -1,18 +1,20 @@
 package main
 
 import (
-	"bufio"
+	//"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"github.com/mattn/go-tty"
 )
 
-var Esc string = "\x1b"
-var RUNE_A rune = '\x3d'
-var RUNE_LF rune = 0xA
-var CMD_SEND []rune = []rune{0x73, 0x65, 0x6E, 0x64, 0xD, 0xA}
-var CMD_EXIT []rune = []rune{0x65, 0x78, 0x69, 0x74, 0xD, 0xA}
+var esc string = "\x1b"
+var runeA rune = '\x3d'
+var runeLf rune = 0xA
+var runeCarriageReturn rune = 0xD
+var cmdSend []rune = []rune{0x73, 0x65, 0x6E, 0x64, 0xD}
+var cmdExit []rune = []rune{0x65, 0x78, 0x69, 0x74, 0xD}
 
 func main() {
 
@@ -33,21 +35,35 @@ func writeToPipe(pw *io.PipeWriter, ch chan int) {
 	var command []rune
 	var err error
 	var r rune
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		if r, _, err = reader.ReadRune(); errors.Is(io.EOF, err) {
-			fmt.Println("EOF!")
-			command = CMD_SEND
-			r = RUNE_LF
-		} else {
-			command = append(command, r)
-		}
+	var t *tty.TTY
 
-		if r == RUNE_LF {
-			if compareRune(command, CMD_SEND) {
+	if t, err = tty.Open(); err != nil {
+		fmt.Println(err)
+		panic(err)
+	}
+
+	for {
+		if r, err = t.ReadRune(); errors.Is(io.EOF, err) {
+			fmt.Println("EOF!")
+			//command = cmdSend
+			//r = runeCarriageReturn
+		} else {
+			if r == 0x0 {
+				//fmt.Println("0x0")
+				continue
+			}
+			command = append(command, r)
+			fmt.Println(command)
+		}
+		if r == runeCarriageReturn {
+			fmt.Println("Carriage Return")
+			fmt.Println("Kommando: ", string(command))
+			fmt.Println("Code: ", command)
+			if compareRune(command, cmdSend) {
+				fmt.Println("Sending Message", command)
 				doWrite(pw, ch, data)
-				data = make([]rune, 0) // Daten zum senden
-			} else if compareRune(command, CMD_EXIT) {
+				data = make([]rune, 0) // Daten zum senden zurücksetzen
+			} else if compareRune(command, cmdExit) {
 				break
 			} else {
 				data = append(data, command...)

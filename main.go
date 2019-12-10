@@ -20,17 +20,16 @@ const sRune rune = 115
 const uRune rune = 117
 
 // cursor
-var saveCursorPosition  = []rune{ESC, LEFT_SQUARE_BRACKET, sRune}
-var restoreCursorPosition  = []rune{ESC, LEFT_SQUARE_BRACKET, uRune}
+var saveCursorPosition = []rune{ESC, LEFT_SQUARE_BRACKET, sRune}
+var restoreCursorPosition = []rune{ESC, LEFT_SQUARE_BRACKET, uRune}
 
 // keys
-var keyArrowDown = []rune{27,91,66}
-var keyArrowUp = []rune{27,91,65}
+var keyArrowDown = []rune{27, 91, 66}
+var keyArrowUp = []rune{27, 91, 65}
 
 // colors
-var bgColorMagenta []rune = []rune{ESC,LEFT_SQUARE_BRACKET,52,54,109}
-var bgColorReset []rune = []rune{ESC,LEFT_SQUARE_BRACKET,48,109}
-
+var bgColorMagenta []rune = []rune{ESC, LEFT_SQUARE_BRACKET, 52, 54, 109}
+var bgColorReset []rune = []rune{ESC, LEFT_SQUARE_BRACKET, 48, 109}
 
 func main() {
 
@@ -77,6 +76,7 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 	runes = append(saveCursorPosition, runes...)
 	doWrite(pw, ch, runes)
 	var index int = 0
+	var maxIndex int = len(m)
 	for {
 		if key, err = t.ReadRune(); errors.Is(io.EOF, err) {
 			fmt.Println("EOF!")
@@ -85,35 +85,39 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 		if key == 0 {
 			continue
 		}
-		fmt.Println("Rune:", key)
+		//fmt.Println("Rune:", key)
 		if key == 27 || len(input) > 3 {
-			input = make([]rune,0)
+			input = make([]rune, 0)
 		}
 		input = append(input, key)
 
 		if compareRune(input, keyArrowUp) {
-			mh := prepareOutput(m, index)
-			runes = convertToSliceOfRunes(mh)
-			doWrite(pw, ch, runes)
-			index--
+			if index > 0 {
+                mh := prepareOutput(m, index)
+                runes = convertToSliceOfRunes(mh)
+                doWrite(pw, ch, runes)
+				index--
+			}
 		} else if compareRune(input, keyArrowDown) { // Key down
-			mh := prepareOutput(m, index)
-			runes = convertToSliceOfRunes(mh)
-			doWrite(pw, ch, runes)
-			index++
+			if index <= maxIndex {
+                mh := prepareOutput(m, index)
+                runes = convertToSliceOfRunes(mh)
+                doWrite(pw, ch, runes)
+				index++
+			}
 		}
 	}
 	exitWriteToPipe(pw, ch)
 }
 
-func prepareOutput(originalMap map[int][]rune, index int)  map[int][]rune {
+func prepareOutput(originalMap map[int][]rune, index int) map[int][]rune {
 	mh := make(map[int][]rune, len(originalMap))
 	for k, v := range originalMap {
 		if k == 0 {
 			mh[k] = append(restoreCursorPosition, v...)
 		} else if k == index {
 			highlighted := append(bgColorMagenta, v...)
-			highlighted = append(highlighted,bgColorReset...)
+			highlighted = append(highlighted, bgColorReset...)
 			mh[k] = highlighted
 		} else {
 			mh[k] = v
@@ -131,7 +135,7 @@ func exitWriteToPipe(pw *io.PipeWriter, ch chan int) {
 func convertToSliceOfRunes(m map[int][]rune) []rune {
 	var data []rune
 	for _, v := range m {
-		v = append(v, LF, CR)
+		//v = append(v, LF, CR)
 		data = append(data, v...)
 
 	}

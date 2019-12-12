@@ -2,8 +2,6 @@ package main
 
 import (
 	"bufio"
-	"unicode/utf8"
-
 	//"bufio"
 	"errors"
 	"fmt"
@@ -33,21 +31,27 @@ var bgColorReset []rune = []rune{ESC, LEFT_SQUARE_BRACKET, 48, 109}
 
 func main() {
 
-	fmt.Println("Start!")
-	var lines []string
+	//fmt.Println("Start!")
+	lines := make(map[int][]rune)
 	pr, pw := io.Pipe()
 	c1 := make(chan int)
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(bufio.ScanLines)
+	var i int = 0
 	for scanner.Scan() {
 		line := scanner.Text()
-		if utf8.ValidString(line) == false {
-			fmt.Println("Kein UTF-8!")
-		}
-		lines = append(lines, line)
+
+		//if utf8.ValidString(line) == false {
+		//	fmt.Println("Kein UTF-8!")
+		//}
+		runes := []rune(line)
+		runes = append(runes, LF)
+		lines[i] = runes
+		i++
 	}
-	m := convertToMap(lines)
-	go writeToPipe(pw, c1, m)
+	//fmt.Println(lines)
+
+	go writeToPipe(pw, c1, lines)
 	readFromPipe(pr)
 	<-c1
 
@@ -68,6 +72,8 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 	var input []rune
 	var t *tty.TTY
 
+
+
 	if t, err = tty.Open(); err != nil {
 		fmt.Println(err)
 		panic(err)
@@ -76,7 +82,7 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 	runes = append(saveCursorPosition, runes...)
 	doWrite(pw, ch, runes)
 	var index int = 0
-	var maxIndex int = len(m)
+	var maxIndex int = len(m) - 1
 	for {
 		if key, err = t.ReadRune(); errors.Is(io.EOF, err) {
 			fmt.Println("EOF!")
@@ -85,25 +91,27 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 		if key == 0 {
 			continue
 		}
-		//fmt.Println("Rune:", key)
 		if key == 27 || len(input) > 3 {
 			input = make([]rune, 0)
+		} else if key == CR {
+			WriteToClipboard("Paul du hast es geschafft!")
+			break
 		}
 		input = append(input, key)
 
-		if compareRune(input, keyArrowUp) {
-			if index > 0 {
-                mh := prepareOutput(m, index)
-                runes = convertToSliceOfRunes(mh)
-                doWrite(pw, ch, runes)
+		if compareRune(input, keyArrowUp) { // Key up
+			if index >= 0 {
 				index--
+				mh := prepareOutput(m, index)
+				runes = convertToSliceOfRunes(mh)
+				doWrite(pw, ch, runes)
 			}
 		} else if compareRune(input, keyArrowDown) { // Key down
-			if index <= maxIndex {
-                mh := prepareOutput(m, index)
-                runes = convertToSliceOfRunes(mh)
-                doWrite(pw, ch, runes)
+			if index < maxIndex {
 				index++
+				mh := prepareOutput(m, index)
+				runes = convertToSliceOfRunes(mh)
+				doWrite(pw, ch, runes)
 			}
 		}
 	}
@@ -112,16 +120,20 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 
 func prepareOutput(originalMap map[int][]rune, index int) map[int][]rune {
 	mh := make(map[int][]rune, len(originalMap))
-	for k, v := range originalMap {
-		if k == 0 {
-			mh[k] = append(restoreCursorPosition, v...)
-		} else if k == index {
-			highlighted := append(bgColorMagenta, v...)
-			highlighted = append(highlighted, bgColorReset...)
-			mh[k] = highlighted
-		} else {
-			mh[k] = v
+	for i := 0; i < len(originalMap); i++ {
+		//for k, v := range originalMap {
+		var consolestream []rune
+		var escapeseqence []rune
+		if i == 0 {
+			escapeseqence = restoreCursorPosition // Restore Cursor Position
 		}
+		if index == i {
+			escapeseqence = append(escapeseqence, bgColorMagenta...)
+		}
+		consolestream = append(escapeseqence, originalMap[i]...) // Mark Line
+		consolestream = append(consolestream, bgColorReset...)
+		mh[i] = consolestream
+
 	}
 	return mh
 }
@@ -134,10 +146,9 @@ func exitWriteToPipe(pw *io.PipeWriter, ch chan int) {
 
 func convertToSliceOfRunes(m map[int][]rune) []rune {
 	var data []rune
-	for _, v := range m {
-		//v = append(v, LF, CR)
-		data = append(data, v...)
-
+	for i := 0; i < len(m); i++ {
+		//for _, v := range m {
+		data = append(data, m[i]...)
 	}
 	return data
 }
@@ -165,12 +176,8 @@ func doWrite(pw *io.PipeWriter, ch chan int, data []rune) {
 func readFromPipe(pr *io.PipeReader) {
 
 	defer pr.Close()
-	//var buf []byte
-	//writer := bufio.NewWriter(os.Stdout)
 	if _, err := io.Copy(os.Stdout, pr); err != nil {
 		fmt.Println("Unerwartetes Ende der Leitung. Wurde geschlossen!")
-		//ch <- 1
 	}
 	fmt.Println("Pipe wurde geschlossen!")
-	//ch <- 1
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/mattn/go-tty"
 	"io"
 	"os"
+	//"github.com/atotto/clipboard"
 )
 
 const ESC rune = 27
@@ -72,8 +73,6 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 	var input []rune
 	var t *tty.TTY
 
-
-
 	if t, err = tty.Open(); err != nil {
 		fmt.Println(err)
 		panic(err)
@@ -94,7 +93,7 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 		if key == 27 || len(input) > 3 {
 			input = make([]rune, 0)
 		} else if key == CR {
-			WriteToClipboard("Paul du hast es geschafft!")
+			WriteToClipboard(string(m[index][:len(m[index])-1]))
 			break
 		}
 		input = append(input, key)

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"syscall"
 	"time"
 	"unsafe"
@@ -51,7 +52,8 @@ func writeToClipboard(text string) error {
 	}
 	defer closeClipboardProc.Call()
 	var r uintptr
-	if r, _, err = emptyClipboardProc.Call(0); err != nil {
+	if r, _, err = emptyClipboardProc.Call(0); r == 0 {
+		fmt.Println("Clipboard konnte nicht geloescht werden!")
 		return err
 	}
 

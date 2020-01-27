@@ -41,30 +41,17 @@ func main() {
 	var i int = 0
 	for scanner.Scan() {
 		line := scanner.Text()
-
-		//if utf8.ValidString(line) == false {
-		//	fmt.Println("Kein UTF-8!")
-		//}
 		runes := []rune(line)
 		runes = append(runes, LF)
 		lines[i] = runes
 		i++
 	}
-	//fmt.Println(lines)
 
 	go writeToPipe(pw, c1, lines)
 	readFromPipe(pr)
 	<-c1
 
 	fmt.Println("Tschüssikovski!")
-}
-
-func convertToMap(str []string) map[int][]rune {
-	m := make(map[int][]rune)
-	for i, s := range str {
-		m[i] = []rune(s)
-	}
-	return m
 }
 
 func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
@@ -80,7 +67,7 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 	runes := convertToSliceOfRunes(m)
 	runes = append(saveCursorPosition, runes...)
 	doWrite(pw, ch, runes)
-	var index int = 0
+	var index int = -1
 	var maxIndex int = len(m) - 1
 	for {
 		if key, err = t.ReadRune(); errors.Is(io.EOF, err) {
@@ -106,7 +93,7 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 				doWrite(pw, ch, runes)
 			}
 		} else if compareRune(input, keyArrowDown) { // Key down
-			if index < maxIndex {
+			if index <= maxIndex {
 				index++
 				mh := prepareOutput(m, index)
 				runes = convertToSliceOfRunes(mh)

@@ -33,8 +33,8 @@ var bgColorMagenta []rune = []rune{ESC, LEFT_SQUARE_BRACKET, 52, 54, 109}
 var bgColorReset []rune = []rune{ESC, LEFT_SQUARE_BRACKET, 48, 109}
 
 type Word struct {
-	index int
-	character []rune
+	index       int
+	character   []rune
 	highlighted bool
 }
 
@@ -58,8 +58,6 @@ func main() {
 	go writeToPipe(pw, c1, lines)
 	readFromPipe(pr)
 	<-c1
-
-	fmt.Println("Tschüssikovski!")
 }
 
 func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
@@ -89,13 +87,22 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 		if key == 27 || len(input) > 3 {
 			input = make([]rune, 0)
 		} else if key == CR {
-			WriteToClipboard(string(m[index][:len(m[index])-1]))
+			if horizontalIndex == -1 {
+				WriteToClipboard(string(m[index][:len(m[index])-1]))
+			} else {
+				sentence := splitSentence(m[index])
+				for i := 0; i < len(sentence); i++ {
+					if horizontalIndex == i {
+						WriteToClipboard(string(sentence[i]))
+					}
+				}
+			}
 			break
 		}
 		input = append(input, key)
 
 		if compareRune(input, keyArrowUp) { // Key up
-		horizontalIndex = -1
+			horizontalIndex = -1
 			if index >= 0 {
 				index--
 				mh := prepareOutput(m, index, horizontalIndex, false)
@@ -111,43 +118,48 @@ func writeToPipe(pw *io.PipeWriter, ch chan int, m map[int][]rune) {
 				doWrite(pw, ch, runes)
 			}
 		} else if compareRune(input, keyArrowRight) { // Key right
-			//if index <= maxIndex {
-			sentence := m[index]
-			words := splitSentence(sentence)
-			if horizontalIndex <= len(words) {
-				horizontalIndex++
+			if index <= maxIndex {
+				sentence := m[index]
+				words := splitSentence(sentence)
+				if horizontalIndex <= len(words) {
+					horizontalIndex++
+				}
+				mh := prepareOutput(m, index, horizontalIndex, true)
+				runes = convertToSliceOfRunes(mh)
+				doWrite(pw, ch, runes)
+			}
+
+		} else if compareRune(input, keyArrowLeft) { // Key left
+			if index <= maxIndex {
+				if horizontalIndex >= 0 {
+					horizontalIndex--
+				}
 			}
 			mh := prepareOutput(m, index, horizontalIndex, true)
 			runes = convertToSliceOfRunes(mh)
 			doWrite(pw, ch, runes)
-			//}
-		} else if compareRune(input, keyArrowLeft) { // Key left
-			//if index <= maxIndex {
-			horizontalIndex--
-			mh := prepareOutput(m, index, horizontalIndex, true)
-			runes = convertToSliceOfRunes(mh)
-			doWrite(pw, ch, runes)
-			//}
 		}
 
 	}
 	exitWriteToPipe(pw, ch)
 }
 
-func splitSentence(sentence []rune) map[int]Word{
-	wordmap := make(map[int]Word)
-	var word *Word
-	var character []rune
+func splitSentence(sentence []rune) map[int][]rune {
+	wordmap := make(map[int][]rune)
+	var word []rune
+	//var character []rune
 	var wordcount int = 0
 	var lastrune rune = 32 // SPACE
 	for _, r := range sentence {
-		if ((lastrune != 32 && r == 32) || (lastrune == 32 && r != 32)) && len(character) > 0 { // neues Wort
-			word = &Word{index:wordcount, character:character}
-			wordmap[wordcount] = *word
+		if ((lastrune != 32 && r == 32) || (lastrune == 32 && r != 32)) && len(word) > 0 || r == CR { // neues Wort
+			if r == CR {
+				word = append(word, CR)
+			}
+			wordmap[wordcount] = word
 			wordcount++
-			character = []rune{}
+			word = []rune{}
 		}
-		character = append(character, r)
+		word = append(word, r)
 		lastrune = r
 	}
 	return wordmap
@@ -156,9 +168,7 @@ func splitSentence(sentence []rune) map[int]Word{
 func prepareOutput(originalMap map[int][]rune, index int, horizontalindex int, highlightword bool) map[int][]rune {
 	mh := make(map[int][]rune, len(originalMap))
 	for i := 0; i < len(originalMap); i++ {
-
-		consolestream := []rune{}
-		//	var escapeseqence []rune
+		var consolestream []rune
 		if i == 0 {
 			consolestream = restoreCursorPosition // Restore Cursor Position
 		}
@@ -173,11 +183,6 @@ func prepareOutput(originalMap map[int][]rune, index int, horizontalindex int, h
 		} else {
 			consolestream = append(consolestream, originalMap[i]...)
 		}
-		//	consolestream = append(consolestream, originalMap[i]...)
-		//if !highlightword {
-		//consolestream = append(consolestream, originalMap[i]...)
-		//consolestream = append(consolestream, bgColorReset...)
-		//}
 		mh[i] = consolestream
 	}
 
@@ -186,14 +191,21 @@ func prepareOutput(originalMap map[int][]rune, index int, horizontalindex int, h
 
 func highlightWord(row []rune, horizontalindex int) []rune {
 	wordmap := make(map[int][]rune)
-	var word []rune
+	var word []rune = bgColorReset
 	var wordcount int = 0
 	var lastrune rune = 32 // SPACE
 	for _, r := range row {
-		if ((lastrune != 32 && r == 32) || (lastrune == 32 && r != 32)) && len(word) > 0 { // neues Wort
-			if wordcount == horizontalindex && !isSpaceWord(word) {
-				word = append(bgColorMagenta, word...)
-				word = append(word, bgColorReset...)
+		if (((lastrune != 32 && r == 32) || (lastrune == 32 && r != 32)) && len(word) > 0) || r == LF { // neues Wort
+			if r == LF {
+				word = append(word, LF)
+			}
+			if wordcount == horizontalindex {
+				if isSpaceWord(word) {
+					horizontalindex++
+				} else {
+					word = append(bgColorMagenta, word...)
+					word = append(word, bgColorReset...)
+				}
 			}
 			wordmap[wordcount] = word
 			wordcount++
@@ -203,12 +215,9 @@ func highlightWord(row []rune, horizontalindex int) []rune {
 		lastrune = r
 	}
 	var highlightedRow []rune
-	//for _, v := range wordmap {
-	for i:=0; i<len(wordmap); i++ {
+	for i := 0; i < len(wordmap); i++ {
 		highlightedRow = append(highlightedRow, wordmap[i]...)
-		//	highlightedRow = append(highlightedRow, 32)
 	}
-	//return append(highlightedRow, CR)
 	return highlightedRow
 }
 
@@ -217,15 +226,14 @@ func isSpaceWord(word []rune) bool {
 		return false
 	}
 	for _, v := range word {
-		if v == 32 {
-			return true
+		if v != 32 {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func exitWriteToPipe(pw *io.PipeWriter, ch chan int) {
-	fmt.Println("Leitung wird an der Senderseite geschlossen!")
 	pw.Close()
 	ch <- 1
 }
@@ -265,5 +273,4 @@ func readFromPipe(pr *io.PipeReader) {
 	if _, err := io.Copy(os.Stdout, pr); err != nil {
 		fmt.Println("Unerwartetes Ende der Leitung. Wurde geschlossen!")
 	}
-	fmt.Println("Pipe wurde geschlossen!")
 }

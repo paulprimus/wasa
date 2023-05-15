@@ -39,7 +39,6 @@ type Word struct {
 
 func main() {
 
-	//fmt.Println("Start!")
 	lines := make(map[int][]rune)
 	pr, pw := io.Pipe()
 	c1 := make(chan int)
